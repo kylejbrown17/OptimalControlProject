@@ -24,6 +24,6 @@ y = dataArray{:, 2};
 th = dataArray{:, 3};
 k = dataArray{:, 4};
 s = dataArray{:, 5};
-n = 30*zeros(size(s));
+n = 15*zeros(size(s));
 
 end
