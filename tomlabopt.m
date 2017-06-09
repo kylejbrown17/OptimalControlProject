@@ -1,6 +1,7 @@
 %% AA203 - Optimal Autonomous Racing
 % PROPT with Tomlab Models
 %
+clear all; close all; clc;
 %% Car Parameters
 % Sizing
 lf = 1.8;    % m, distance from CM to front axle
@@ -25,7 +26,7 @@ sf = s_track(end);
 
 %% Define model with collocation points
 toms s
-p = tomPhase('p', s, s0, sf, 40);
+p = tomPhase('p', s, s0, sf, 10);
 setPhase(p);
 
 tomStates x y psi n
@@ -40,7 +41,9 @@ x0 = collocate({x == interp1(s_track,x_track,s)';
 %% Define constraints
 % Box constraints
 cbox = collocate({-2*pi <= psi <= 2*pi;
-    -interp1(s_track,n_track,s) <= n <= interp1(s_track,n_track,s)});
+    -100 <= n <= 100});
+    
+%-interp1(s_track,n_track,s) <= n <= interp1(s_track,n_track,s)});
 
 % Boundary constraints
 cbnd = {initial({x == x_track(1); y == y_track(1); psi == th_track(1); n == 0})
