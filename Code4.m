@@ -1,9 +1,10 @@
 %Get creates map 
-path = readTrack();
-path.k_1pm = abs(path.k_1pm); 
-path.psi_rad = -path.psi_rad; 
-path.posE_m = -path.posE_m; 
-path.posN_m = -path.posN_m; 
+K = 0.035;
+s = [0      20    40   60    80];
+k = [K   -2*K   -K   2*K    0];
+path = generate_path(s,k,[0;0;0]);
+s_end = path.s_m(end); 
+
 
 %Vehicle parameters
 m = 1600;                       % mass in kg
@@ -27,34 +28,28 @@ veh.rW = 0.35;                  % tire radius
 % C_DA = 0.594;                 % drag coefficient in m^2 at rho = 1.225 kg/m^3
 
 g = 9.81;                        % gravity
-Ux = 5; 
-K = 0.05; 
+Ux = 8;  
 
 % constant radius  path
 % "undulating" path
 s_end = path.s_m(end); 
 dT = 0.01; 
-dS = 0.25; 
-Tfinal = round(s_end/dS); 
+Tfinal = 1000; 
+
 
 % generate A, B matrices
+R = 4; 
+N = 15; 
 n =3; m = 1; 
-xbar = [2; 0.]; ubar = 0.3; 
-x0 = [0; 0.3; 0]; 
+xbar = [1; 0.5]; ubar = 1; 
+x0 = [0; 0; 0]; 
 
 % objective and constraints
-N = 20; Q = eye(n); R = 100; 
-P = eye(n); 
-% [P_inf,L,G] = dare(A,B,Q,R);
-% P = P_inf;
-Qhalf = sqrtm(Q); Rhalf = sqrtm(R);
-Phalf = sqrtm(P); 
 xmax = xbar; xmin = -xbar; 
 umax = ubar; umin = -ubar;
-z = x0(:,1); optvalfha = zeros(N,1);
+z = x0; optvalfha = zeros(N,1);
 
 % model predictive control
-Tfinal = 100;
 Xallmpc = zeros(n,Tfinal); Uallmpc = zeros(m,Tfinal); Sall = zeros(1, Tfinal);
 T = N; 
 % for T = minT:N
@@ -62,29 +57,31 @@ T = N;
     
     for i = 1:Tfinal
 %         cvx_precision(max(min(abs(x))/10,1e-6))
-            K = path.k_1pm(i); 
+            K = interp1(path.s_m,path.k_1pm, x(1));
+            
+            
             A = [0 K*Ux 0; 0  0 Ux; 0 -K^2*Ux 0]; B = [0; 0; Ux/veh.L];
             ff = [Ux; 0; -K*Ux]; 
+            
             
             cvx_begin quiet
             variables X(n,T+1) U(m,T) S(1,T+1)
             
 %           %state constraints
             max(X(2,:)) <= xmax(1); min(X(2,:)) >= xmin(1);
-            max(X(3,:)) <= xmax(2); min(X(3,:)) >= xmin(2)
+%             max(X(3,:)) <= xmax(2); min(X(3,:)) >= xmin(2)
             max(X(1,:)) <= s_end; 
             
             %control constraints
             max(U') <= umax'; min(U') >= umin';
        
-            
             %System dynamics
             X(:, 2:T+1) ==  X(:, 1:T) + dT*(A*X(:,1:T) + B*U(1:T) + ff*(ones(1, T))); 
             X(:,1) == x;  
             S == s_end*ones(1, T+1) - X(1, :); 
             
             %control objectives
-            minimize (S*S'); 
+            minimize (1); 
             cvx_end
            
            %Receding horizon implementation
@@ -106,8 +103,7 @@ T = N;
         end; 
                 
     end
-       
-   dT = 0.005;
+    
    t = 0:dT:(Tfinal-1)*dT;
    
    
