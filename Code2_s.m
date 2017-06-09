@@ -4,7 +4,6 @@
 % EE364b, Convex Optimization II, S. Boyd, Stanford University.
 % Written by Yang Wang, 04/2008
 
-load 'hw5_data.mat';
 %Vehicle parameters
 m = 1600;                       % mass in kg
 Iz = 2200;                      % moment of inertia in kg m^2
@@ -31,7 +30,7 @@ Ux = 10;
 K =0.05; 
 
 % constant radius  path
-s = [0      256];
+s = [0      300];
 k = [K   K];
 path = generate_path(s,k,[0;0;0]);
 s_end = path.s_m(end); 
