@@ -1,75 +1,66 @@
 %% AA203 - Optimal Autonomous Racing
 % PROPT with Tomlab Models
 %
-%% Read Track Parameters
-fname = 'track.csv';
-
-delimiter = ','; startRow = 2;
-formatSpec = '%f%f%f%f%f%[^\n\r]';
-fileID = fopen(fname,'r');
-dataArray = textscan(fileID, formatSpec, 'Delimiter', delimiter, 'HeaderLines' ,startRow-1, 'ReturnOnError', false);
-fclose(fileID);
-
-% Track parameters
-x_track = dataArray{:, 1};
-y_track = dataArray{:, 2};
-th_track = dataArray{:, 3}; % track heading, rad
-k_track = dataArray{:, 4}; % curvature
-s_track = dataArray{:, 5}; % arclength
-N = 10; % track width, m
-
 %% Car Parameters
 % Sizing
-lf = 1.8; % m, distance from CM to front axle
-w = 3.4; % m, wheelbase
+lf = 1.8;    % m, distance from CM to front axle
+w = 3.4;     % m, wheelbase
 lr = w - lf; % m, distance from CM to rear axle
 % Speed
 V = 5; % m/s
 
+%% Read Track Parameters
+[x_track,y_track,th_track,k_track,s_track,n_track] = readTrack();
+
+x_track = x_track(1:10);
+y_track = y_track(1:10);
+th_track = th_track(1:10);
+k_track = k_track(1:10);
+s_track = s_track(1:10);
+n_track = n_track(1:10);
+
+%% Reparameterization wrt Arclength
+s0 = s_track(1); 
+sf = s_track(end);
+
 %% Define model with collocation points
-toms t
-toms tf
-ncolloc = numel(s_track);
-p = tomPhase('p', t, 0, tf, ncolloc);
+toms s
+p = tomPhase('p', s, s0, sf, 40);
 setPhase(p);
 
 tomStates x y psi n
 tomControls beta
 
-% Set initial guess to finite horizon trajectory
-x0 = {tf == sim;
-    icollocate(x == interp1(tsim,xsim,t)');
-    icollocate(y == interp1(tsim,ysim,t)');
-    icollocate(psi == interp1(tsim,psisim,t)');
-    icollocate(n == interp1(tsim,nsim,t)')};
+% Set initial guess to center line
+x0 = collocate({x == interp1(s_track,x_track,s)';
+    y == interp1(s_track,y_track,s)';
+    psi == interp1(s_track,th_track,s)';
+    n == 0});
 
 %% Define constraints
 % Box constraints
-cbox = collocate({1.5*min(x_track) <= icollocate(x) <= 1.5*max(x_track)
-    1.5*min(y_track) <= icollocate(y) <= 1.5*max(y_track)
-    -2*pi <= psi <= 2*pi
-    -N <= n <= N});
+cbox = collocate({-2*pi <= psi <= 2*pi;
+    -interp1(s_track,n_track,s) <= n <= interp1(s_track,n_track,s)});
 
 % Boundary constraints
 cbnd = {initial({x == x_track(1); y == y_track(1); psi == th_track(1); n == 0})
-    final({x == x_track(end); y == y_track(end);})};
+    final({x == x_track(end); y == y_track(end)})};
 
 %% ODEs and path constraints
-ceq = collocate({dot(x) == V*cos(psi + beta)
-    dot(y) == V*sin(psi + beta)
-    dot(psi) == V/lr*sin(beta)
-    dot(n) == dot(x)*cos(psi) - dot(y)*sin(psi)});
+ceq = collocate({...
+    dot(x) == V*cos(psi+beta) * (1-interp1(s_track,n_track,s)*interp1(s_track,k_track,s)) / (V*cos(psi+beta)*cos(psi-interp1(s_track,th_track,s)) - V*sin(psi+beta)*sin(psi-interp1(s_track,th_track,s)));    
+    dot(y) == V*sin(psi+beta) * (1-interp1(s_track,n_track,s)*interp1(s_track,k_track,s)) / (V*cos(psi+beta)*cos(psi-interp1(s_track,th_track,s)) - V*sin(psi+beta)*sin(psi-interp1(s_track,th_track,s)));
+    dot(psi) == V/lr*sin(beta) * (1-interp1(s_track,n_track,s)*interp1(s_track,k_track,s)) / (V*cos(psi+beta)*cos(psi-interp1(s_track,th_track,s)) - V*sin(psi+beta)*sin(psi-interp1(s_track,th_track,s)));
+    dot(n) == (V*cos(psi+beta)*sin(psi-interp1(s_track,th_track,s))+V*sin(psi+beta)*cos(psi-interp1(s_track,th_track,s))) * (1-interp1(s_track,n_track,s)*interp1(s_track,k_track,s)) / (V*cos(psi+beta)*cos(psi-interp1(s_track,th_track,s)) - V*sin(psi+beta)*sin(psi-interp1(s_track,th_track,s)))    
+    });
     
-    %dot(n) == dot(x)*cos(psi - th_track) - dot(y)*sin(psi - th_track)});
-
-objective = tf;
+objective = 1/dot(s);
 
 %% Solve!
 options = struct;
 options.name = 'SpeedRacer';
 options.solver = 'knitro';
-solution = ezsolve(objective, {cbox, cbnd, ceq}, x0, options); % cbox
-t = subs(collocate(t),solution);
+solution = ezsolve(objective, {cbox, cbnd, ceq}, x0, options);
 
 %% Example
 run_ex = false;
